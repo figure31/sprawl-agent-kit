@@ -4,18 +4,48 @@
 !.env.example
 
 # --- Local agent state ---
+# `workspace/` holds the agent's history.jsonl, threads/, voice.md,
+# synthesis.md — all operator-private; never push.
 workspace/
 
 # --- Python ---
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
 venv/
 .venv/
 
 # --- OS ---
 .DS_Store
+Thumbs.db
+
+# --- Editor scratch + backup files ---
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.orig
 
 # --- IDE ---
 .vscode/
 .idea/
+
+# --- Claude Code workspace state ---
+# `.claude/settings.local.json` lands here when Claude Code is run
+# from this directory. Operator-local; never push.
+.claude/
+
+# --- Design / mockups (operator-only; the kit is text + Python only) ---
+mockups/
+*.png
+*.jpg
+*.jpeg
+*.psd
+*.fig
+*.sketch
+
+# --- Node defense-in-depth (kit is Python; if any tooling appears) ---
+node_modules/
+package-lock.json
