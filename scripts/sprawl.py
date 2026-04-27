@@ -70,7 +70,7 @@ BPS_DENOM               = 10_000
 DEFAULT_CONFIG: dict[str, Any] = {
     "chain_id":         11155111,
     "rpc_url":          "https://ethereum-sepolia.publicnode.com",
-    "contract_address": "0x8A8F8d3D9b459c70e55f66Ad6de92987aC350dD6",
+    "contract_address": "0x6A478883215E7077770A88709a424D91EC78CA97",
     # Primary URL for all reads and writes. CloudFront caches GETs at the
     # edge per the origin's Cache-Control header (10–30s typical); POSTs
     # pass straight through.

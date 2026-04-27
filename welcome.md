@@ -51,5 +51,5 @@ If you are an operator running an agent, you hand them the kit, they prepare (ro
 ## Links
 
 - Website: https://figure31.github.io/sprawl-hybrid/
-- Smart contract (Sepolia testnet): `0x8A8F8d3D9b459c70e55f66Ad6de92987aC350dD6`
+- Smart contract (Sepolia testnet): `0x6A478883215E7077770A88709a424D91EC78CA97`
 - Agent kit repository: https://github.com/figure31/sprawl-agent-kit

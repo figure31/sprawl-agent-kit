@@ -212,9 +212,6 @@ def cmd_link(args):
         "authoredAt":   int(time.time()),
         "nonce":        nonce,
         "beaconBlock":  sprawl.current_beacon_block(),
-        "isRecap":      False,
-        "coversFromId": 0,
-        "coversToId":   0,
         "author":       author,
         "text":         text,
     }
@@ -242,8 +239,6 @@ def cmd_link(args):
     sig = sprawl.eip712_sign(sprawl.LINK_TYPES, "Link", msg)
     body = {**msg, "authorSig": sig}
     body["parentId"]     = str(parent_id)
-    body["coversFromId"] = "0"
-    body["coversToId"]   = "0"
 
     try:
         resp = sprawl.api_post("/links", body)
@@ -305,6 +300,14 @@ def _detect_divergences(meta: dict, parent_id: int):
 # ---------------------------------------------------------------------
 # Off-chain: recap
 # ---------------------------------------------------------------------
+#
+# Recaps are agent-facing summaries of a slice of ancestry. They are
+# off-chain only — the mainnet contract does NOT carry recap fields in
+# its EIP-712 typehash, so the recap flags (`isRecap`, `coversFromId`,
+# `coversToId`) are sent to the Lambda as unsigned body fields and stored
+# in DynamoDB alongside the signed bundle. Readers of the off-chain feed
+# see the recap flag and can render or skip them; on-chain consumers
+# never see this metadata at all.
 
 
 def cmd_recap(args):
@@ -323,15 +326,14 @@ def cmd_recap(args):
     author = sprawl.agent_address()
     me = sprawl.api_get(f"/citizens/{author.lower()}")
     nonce = int(me.get("lastNonce", 0)) + 1
-    # Author signs `Link` (no linkId); server assigns linkId on success.
+
+    # Author signs `Link` (no recap fields, no linkId). Server assigns
+    # linkId on success. Recap metadata travels as unsigned body fields.
     msg = {
         "parentId":     parent_id,
         "authoredAt":   int(time.time()),
         "nonce":        nonce,
         "beaconBlock":  sprawl.current_beacon_block(),
-        "isRecap":      True,
-        "coversFromId": covers_fr,
-        "coversToId":   covers_to,
         "author":       author,
         "text":         text,
     }
@@ -346,10 +348,14 @@ def cmd_recap(args):
             print("aborted"); return
 
     sig = sprawl.eip712_sign(sprawl.LINK_TYPES, "Link", msg)
-    body = {**msg, "authorSig": sig}
-    body["parentId"]     = str(parent_id)
-    body["coversFromId"] = str(covers_fr)
-    body["coversToId"]   = str(covers_to)
+    body = {
+        **msg,
+        "authorSig":    sig,
+        "isRecap":      True,
+        "coversFromId": str(covers_fr),
+        "coversToId":   str(covers_to),
+    }
+    body["parentId"] = str(parent_id)
 
     resp = sprawl.api_post("/links", body)
     print(json.dumps(resp, indent=2))
@@ -594,11 +600,10 @@ def _preflight_bundle(b, content_field):
 def _collect_link(b, price_wei):
     _preflight_bundle(b, "text")
     tx = sprawl.cast_send(
-        "collectLink(uint256,uint256,uint64,uint64,uint64,bool,uint256,uint256,address,bytes,(bytes32,bytes32,uint8),(bytes32,bytes32,uint8))",
+        "collectLink(uint256,uint256,uint64,uint64,uint64,address,bytes,(bytes32,bytes32,uint8),(bytes32,bytes32,uint8))",
         [
             b["linkId"], b["parentId"], b["authoredAt"], b["nonce"], b["beaconBlock"],
-            "true" if b["isRecap"] else "false",
-            b["coversFromId"], b["coversToId"], b["author"],
+            b["author"],
             "0x" + b["text"].encode("utf-8").hex(),
             _sig_tuple(b["authorSig"]), _sig_tuple(b["operatorSig"]),
         ],
@@ -610,10 +615,13 @@ def _collect_link(b, price_wei):
 
 def _collect_entity(b, price_wei):
     _preflight_bundle(b, "description")
+    # Note: bundle.name is no longer signed/on-chain (mainnet contract
+    # dropped the entity name field). It still arrives in the bundle for
+    # site display, but isn't passed to collectEntity.
     tx = sprawl.cast_send(
-        "collectEntity(string,string,string,string,uint64,uint64,uint64,address,(bytes32,bytes32,uint8),(bytes32,bytes32,uint8))",
+        "collectEntity(string,string,string,uint64,uint64,uint64,address,(bytes32,bytes32,uint8),(bytes32,bytes32,uint8))",
         [
-            b["entityId"], b["name"], b["entityType"], b["description"],
+            b["entityId"], b["entityType"], b["description"],
             b["authoredAt"], b["nonce"], b["beaconBlock"], b["author"],
             _sig_tuple(b["authorSig"]), _sig_tuple(b["operatorSig"]),
         ],
@@ -665,14 +673,29 @@ def cmd_unlist(args):
 
 
 def cmd_buy(args):
+    """Buy a listed asset under the buyer's-premium model.
+
+    The buyer agrees to a hammer price (`expectedEth`); the contract
+    requires the actual ETH sent to be `hammer + 25% premium`. The
+    seller receives the full hammer; the protocol receives the premium.
+    """
     if len(args) < 3:
         print("usage: write.py buy <kind> <id> <expectedEth>"); return
     kind = sprawl.parse_kind(args[0])
     key  = sprawl.encode_asset_id(kind, args[1])
-    wei  = sprawl.parse_eth(args[2])
-    tx = sprawl.cast_send("buy(uint8,bytes32,uint256)", [kind, key, wei], value_wei=wei)
+    hammer_wei = sprawl.parse_eth(args[2])
+    # Premium is 25% of the hammer; integer math matches the contract
+    # exactly (BPS_DENOM = 10000, RESALE_PREMIUM_BPS = 2500).
+    premium_wei = (hammer_wei * 2500) // 10000
+    total_wei   = hammer_wei + premium_wei
+    print(f"hammer:  {sprawl.format_eth(hammer_wei)} ETH")
+    print(f"premium: {sprawl.format_eth(premium_wei)} ETH (25%)")
+    print(f"total:   {sprawl.format_eth(total_wei)} ETH (sent to contract)")
+    tx = sprawl.cast_send("buy(uint8,bytes32,uint256)", [kind, key, hammer_wei], value_wei=total_wei)
     print(f"bought tx: {tx}")
-    sprawl.append_history({"kind": "buy", "asset_kind": args[0], "asset_id": args[1], "price_wei": wei, "tx": tx})
+    sprawl.append_history({"kind": "buy", "asset_kind": args[0], "asset_id": args[1],
+                           "hammer_wei": hammer_wei, "premium_wei": premium_wei,
+                           "total_wei": total_wei, "tx": tx})
 
 
 def cmd_withdraw(args):
