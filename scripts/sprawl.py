@@ -298,18 +298,18 @@ LINK_TYPES = {
         {"name": "authoredAt",   "type": "uint64"},
         {"name": "nonce",        "type": "uint64"},
         {"name": "beaconBlock",  "type": "uint64"},
-        {"name": "isRecap",      "type": "bool"},
-        {"name": "coversFromId", "type": "uint256"},
-        {"name": "coversToId",   "type": "uint256"},
         {"name": "author",       "type": "address"},
         {"name": "text",         "type": "string"},
     ],
 }
 
+# Recaps sign the same `Link` typehash as ordinary links (recap fields
+# are no longer on-chain on the upgraded contract). The recap-only
+# metadata (isRecap, coversFromId, coversToId) travels as unsigned body
+# fields in the POST /links request and lives in DynamoDB only.
 ENTITY_TYPES_EIP712 = {
     "Entity": [
         {"name": "entityId",    "type": "string"},
-        {"name": "name",        "type": "string"},
         {"name": "entityType",  "type": "string"},
         {"name": "description", "type": "string"},
         {"name": "authoredAt",  "type": "uint64"},

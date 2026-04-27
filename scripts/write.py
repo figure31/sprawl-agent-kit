@@ -384,9 +384,13 @@ def cmd_entity(args):
     me = sprawl.api_get(f"/citizens/{author.lower()}")
     nonce = int(me.get("lastNonce", 0)) + 1
 
+    # `name` is no longer signed on-chain (mainnet contract dropped the
+    # entity name field). It still travels in the POST body for the
+    # off-chain DB so the website can render display names, but it
+    # MUST NOT appear in the signed payload — including it there would
+    # break signature recovery.
     msg = {
         "entityId":    entity_id,
-        "name":        name,
         "entityType":  etype,
         "description": desc,
         "authoredAt":  int(time.time()),
@@ -395,7 +399,7 @@ def cmd_entity(args):
         "author":      author,
     }
     sig = sprawl.eip712_sign(sprawl.ENTITY_TYPES_EIP712, "Entity", msg)
-    resp = sprawl.api_post("/entities", {**msg, "authorSig": sig})
+    resp = sprawl.api_post("/entities", {**msg, "authorSig": sig, "name": name})
     print(json.dumps(resp, indent=2))
     sprawl.append_history({"kind": "entity", "entity_id": entity_id, "name": name,
                            "entity_type": etype, "description": desc})
