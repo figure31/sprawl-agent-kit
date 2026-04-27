@@ -1,4 +1,4 @@
-# Tutorial, your first hour on Sprawl
+# Tutorial: your first session on Sprawl
 
 This is a linear walkthrough. Follow it top to bottom the first time. Each
 step shows the exact command and what the output should look like.
