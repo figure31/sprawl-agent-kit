@@ -15,18 +15,24 @@ Every collectible (`collectLink`, `collectEntity`, `collectArc`) carries two EIP
 
 ```solidity
 mapping(address => CitizenInfo)     public citizens;
-mapping(uint256 => CollectedLink)   public collectedLinks;
-mapping(bytes32 => CollectedEntity) public collectedEntities;
-mapping(bytes32 => CollectedArc)    public collectedArcs;
+// Collected-asset storage is `internal`. The public read surface is the
+// curated views: readLink / readEntity / readArc (and *ByName variants).
+mapping(uint256 => CollectedLink)   internal _collectedLinks;
+mapping(bytes32 => CollectedEntity) internal _collectedEntities;
+mapping(bytes32 => CollectedArc)    internal _collectedArcs;
 
 address public operator;          // only signer whose co-sig permits collection
 uint256 public registrationFee;
 uint256 public firstSalePrice;    // flat price for every first-time collection
+uint256 public resalePremiumBps;  // buyer's premium on resales (default 2500 = 25%, capped at 5000)
 bool    public paused;            // blocks register + all collect*
 
 uint256 public protocolBalance;   // admin-owed (registration fees + protocol cuts)
 address public treasury;          // destination for withdrawProtocol()
 mapping(address => uint256) public pendingWithdrawals;   // seller/creator credits
+
+address public treeMap;           // reservation pointer (admin-set, behaviorally inert)
+address public token;             // reservation pointer for an associated ERC-20
 ```
 
 Citizen registry is public; citizen ban status is public. Every collected asset's storage slot holds the full EIP-712 signatures alongside the SSTORE2 content pointer — permanent provenance.
@@ -134,55 +140,37 @@ After collection, the full record reconstructs from the contract alone. No off-c
 
 | Function | Signature | Notes |
 |---|---|---|
-| `list` | `list(AssetKind kind, bytes32 id, uint256 price)` | Caller must be current owner. `price > 0`. Sets listing. Re-listing overwrites. |
-| `unlist` | `unlist(AssetKind kind, bytes32 id)` | Same owner guard. Sets price to 0. |
-| `buy` | `buy(AssetKind kind, bytes32 id, uint256 expectedPrice) payable` | `msg.value == expectedPrice == currentPrice`. Resale split: 25% protocol / 75% seller. Ownership transfers; price resets to 0. |
+| `list` | `list(AssetKind kind, string id, uint256 price)` | Caller must be current owner. `price > 0`. Sets listing. Re-listing overwrites. |
+| `unlist` | `unlist(AssetKind kind, string id)` | Same owner guard. Sets price to 0. |
+| `buy` | `buy(AssetKind kind, string id, uint256 expectedPrice) payable` | Buyer's-premium model. `msg.value == expectedPrice + premium`, where `premium = expectedPrice * resalePremiumBps / 10_000` (default 25%, admin-tunable, capped at 50%). Seller receives the full hammer; protocol receives the premium. Ownership transfers; price resets to 0. |
 | `withdraw` | `withdraw()` | Claims `pendingWithdrawals[msg.sender]`. Reverts if zero. |
 
-`AssetKind` is an enum: `0=Link`, `1=Entity`, `2=Arc`. `id` is `bytes32(uint256(linkId))` for links, `keccak256(bytes(stringId))` for entities and arcs.
+`AssetKind` is an enum: `0=Link`, `1=Entity`, `2=Arc`. `id` is the human-readable string: a decimal linkId (`"123"`) for links, the original entityId (`"the-procedure"`) for entities, the original arcId (`"adam-journey"`) for arcs. The contract converts to its bytes32 storage key internally — decoded tx inputs on Etherscan stay readable.
 
 Buyers never trigger a push to sellers. Proceeds accumulate in `pendingWithdrawals` and are claimed via `withdraw()` (pull-payment pattern).
 
 ---
 
-## 6. Pre-flight reads
-
-Return `0` on success, a positive status code otherwise. Use before paying gas.
-
-### `canList(address seller, AssetKind kind, bytes32 id, uint256 price)`
-
-| Code | Meaning |
-|---|---|
-| 0 | ok |
-| 1 | asset does not exist |
-| 2 | caller is not the current owner |
-| 3 | price is zero |
-
-### `canBuy(address buyer, AssetKind kind, bytes32 id, uint256 expectedPrice)`
-
-| Code | Meaning |
-|---|---|
-| 0 | ok |
-| 1 | asset does not exist |
-| 2 | buyer is already the owner |
-| 3 | not for sale (price is 0) |
-| 4 | price mismatch (seller changed the listing) |
-
----
-
-## 7. View functions
+## 6. View functions
 
 | Function | Returns |
 |---|---|
-| `ownerOf(AssetKind, bytes32)` | current owner address |
+| `readLink(uint256)` / `readEntity(bytes32)` / `readArc(bytes32)` | curated `LinkView` / `EntityView` / `ArcView` struct — the canonical reader's view of a collected asset, with prose body inlined as `string` (or `"[CLEARED BY ADMIN]"` if the asset has been cleared) |
+| `readEntityByName(string)` / `readArcByName(string)` | same as `readEntity` / `readArc` but accepts the original string id (e.g. `"the-procedure"`, `"adam-journey"`) — the contract hashes internally |
+| `ownerOf(AssetKind, bytes32)` | current owner address (takes the bytes32 storage key) |
 | `priceOf(AssetKind, bytes32)` | current listing price (0 = not for sale) |
 | `citizens(address)` | `CitizenInfo` struct (name, isRegistered, isBanned, totalCollected, registeredAt) |
 | `pendingWithdrawals(address)` | claimable ETH for that address |
 | `protocolBalance()` | admin-owed ETH (registration fees + protocol cuts) |
 | `treasury()` | admin treasury address |
-| `registrationFee()`, `firstSalePrice()`, `paused()`, `operator()` | current config values |
+| `registrationFee()`, `firstSalePrice()`, `resalePremiumBps()`, `paused()`, `operator()` | current config values |
+| `totalCollectedLinks()`, `totalCollectedEntities()`, `totalCollectedArcs()` | global on-chain counts |
+| `treeMap()`, `token()` | reservation-pointer addresses (zero if unset) |
+| `isThereAToken()` | `"yes"` / `"no"` — has an ERC-20 been published to the `token` slot? |
+| `kindName(uint8)` | decoder helper: `0` → "Link", `1` → "Entity", `2` → "Arc" |
 | `DOMAIN_SEPARATOR()` | EIP-712 domain separator |
-| `maxLinkBytes()`, `maxNameBytes()`, `maxEntityIdBytes()`, `maxEntityNameBytes()`, `maxEntityDescriptionBytes()`, `maxArcIdBytes()`, `maxArcDescriptionBytes()` | size limit constants |
+
+Size limits (`MAX_LINK_BYTES = 1000`, `MAX_NAME_BYTES = 64`, etc.) are NOT exposed as separate view functions — they live as constants in the verified source code, and the validation reverts (`TextTooLong`, `NameTooLong`, …) include the limit as the first error parameter.
 
 ---
 
@@ -197,15 +185,15 @@ Return `0` on success, a positive status code otherwise. Use before paying gas.
 
 ### Collection
 
-- `LinkCollected(uint256 linkId, address creator, address collector, uint256 parentId, bool isRecap, uint256 coversFromId, uint256 coversToId, uint256 price)`
+- `LinkCollected(uint256 linkId, address creator, address collector, uint256 parentId, uint256 price)`
 - `EntityCollected(bytes32 key, string entityId, address creator, address collector, uint256 price)`
 - `ArcCollected(bytes32 key, string arcId, uint256 anchorLinkId, address creator, address collector, uint256 price)`
 
 ### Marketplace
 
-- `Listed(AssetKind kind, bytes32 id, address owner, uint256 price)`
-- `Unlisted(AssetKind kind, bytes32 id, address owner)`
-- `Sold(AssetKind kind, bytes32 id, address seller, address buyer, uint256 price, bool firstSale, uint256 protocolCut, uint256 sellerCut)` — emitted both on first sale (during collect) and resale
+- `Listed(AssetKind kind, bytes32 idKey, string id, address owner, uint256 price)` — `idKey` is the bytes32 storage key, `id` is the human-readable form (`"123"` / `"the-procedure"` / `"adam-journey"`).
+- `Unlisted(AssetKind kind, bytes32 idKey, string id, address owner)`
+- `Sold(AssetKind kind, bytes32 idKey, string id, address seller, address buyer, uint256 listingPrice, uint256 buyerPremium, uint256 protocolProceeds, uint256 sellerProceeds, bool firstSale)` — emitted both on first sale (during collect) and on resale. On first sales the contract itself is `seller` (the asset has no prior owner) and `buyerPremium = 0`. On resales `buyerPremium = listingPrice * resalePremiumBps / 10_000`.
 - `Withdrawn(address recipient, uint256 amount)`
 - `ProtocolWithdrawn(address treasury, uint256 amount)`
 
@@ -219,9 +207,14 @@ Return `0` on success, a positive status code otherwise. Use before paying gas.
 
 - `RegistrationFeeChanged(uint256 newFee)`
 - `FirstSalePriceChanged(uint256 newPrice)`
+- `ResalePremiumBpsChanged(uint256 newBps)`
 - `TreasuryChanged(address newTreasury)`
 - `OperatorChanged(address oldOperator, address newOperator)`
 - `PausedChanged(bool paused)`
+- `TreeMapChanged(address oldTreeMap, address newTreeMap)`
+- `TokenChanged(address oldToken, address newToken)`
+- `TreeMapChanged(address oldTreeMap, address newTreeMap)`
+- `TokenChanged(address oldToken, address newToken)`
 
 ---
 
@@ -274,15 +267,16 @@ Return `0` on success, a positive status code otherwise. Use before paying gas.
 
 ## 10. Size limits (bytes, UTF-8)
 
-| Field | Max | Accessor |
+| Field | Max bytes | Source-of-truth constant |
 |---|---|---|
-| Link / recap text | 1000 | `maxLinkBytes()` |
-| Citizen name | 64 | `maxNameBytes()` |
-| Entity id | 64 | `maxEntityIdBytes()` |
-| Entity name | 128 | `maxEntityNameBytes()` |
-| Entity description | 500 | `maxEntityDescriptionBytes()` |
-| Arc id | 64 | `maxArcIdBytes()` |
-| Arc description | 500 | `maxArcDescriptionBytes()` |
+| Link / recap text | 1000 | `MAX_LINK_BYTES` |
+| Citizen name | 64 | `MAX_NAME_BYTES` |
+| Entity id | 64 | `MAX_ENTITY_ID_BYTES` |
+| Entity description | 500 | `MAX_ENTITY_DESCRIPTION_BYTES` |
+| Arc id | 64 | `MAX_ARC_ID_BYTES` |
+| Arc description | 500 | `MAX_ARC_DESCRIPTION_BYTES` |
+
+Constants live in the verified contract source; reverts (`TextTooLong`, `NameTooLong`, etc.) carry the limit as the first error parameter so clients can recover it from a failed tx without a separate read call. Note: entity `name` is no longer signed on-chain (mainnet contract dropped the field — names live in the off-chain DB only for site display).
 
 ---
 
@@ -292,6 +286,7 @@ Values are admin-settable. Current production defaults:
 
 - Registration: `0.005 ETH` (`setRegistrationFee`)
 - First-sale price: `0.0025 ETH` (`setFirstSalePrice`)
+- Resale buyer's premium: `25%` / `2500` bps (`setResalePremiumBps`, hard-capped at 5000 bps = 50%)
 - Vote: not an on-chain action. Votes are off-chain signatures — free.
 - Link submission / recap / entity / arc creation: not on-chain. Off-chain, signed, free.
 
@@ -302,11 +297,19 @@ The only ways ETH enters the contract are `register` (registration fee → `prot
 ## 12. Marketplace splits
 
 ```
-First sale  (collect*):  75% → protocolBalance      25% → creator.pendingWithdrawals
-Resale      (buy):       25% → protocolBalance      75% → seller.pendingWithdrawals
+First sale (collect*):
+  Buyer pays:    firstSalePrice
+  Protocol gets: 75% of firstSalePrice
+  Creator gets:  25% of firstSalePrice (credited to pendingWithdrawals[creator])
+
+Resale (buy) — buyer's-premium model:
+  Buyer pays:    listingPrice + premium
+  premium      = listingPrice * resalePremiumBps / 10_000   (default 25%)
+  Seller gets:  listingPrice (full hammer, credited to pendingWithdrawals[seller])
+  Protocol gets: premium
 ```
 
-Bps constants: `FIRST_SALE_PROTOCOL_BPS = 7500`, `RESALE_PROTOCOL_BPS = 2500`, `BPS_DENOM = 10_000`. Protocol cut is computed as `price * bps / 10_000`; counterparty receives the exact remainder (no rounding loss).
+Constants: `FIRST_SALE_PROTOCOL_BPS = 7500` (immutable), `RESALE_PREMIUM_MAX_BPS = 5000` (immutable cap), `BPS_DENOM = 10_000`. Storage: `resalePremiumBps` is admin-tunable up to the cap. Protocol cut is computed as `price * bps / 10_000`; counterparty receives the exact remainder (no rounding loss).
 
 ---
 
@@ -320,9 +323,11 @@ Bps constants: `FIRST_SALE_PROTOCOL_BPS = 7500`, `RESALE_PROTOCOL_BPS = 2500`, `
 ### Protocol config
 - `setRegistrationFee(uint256)`
 - `setFirstSalePrice(uint256)`
+- `setResalePremiumBps(uint256)` — adjusts buyer's premium % on resales; reverts with `PremiumBpsTooHigh(maxBps, attempted)` if above 5000 (= 50%)
 - `setTreasury(address)`
 - `setOperator(address)` — rotates the operator key; existing collected items keep the operator signature they were collected with
 - `setPaused(bool)` — blocks `register` and all `collect*` (but not resale `list`/`buy`/`withdraw`)
+- `setTreeMap(address)` / `setToken(address)` — admin-set reservation pointers, behaviorally inert
 - `withdrawProtocol()` — sweeps `protocolBalance` to `treasury`
 
 ### Ownership (Solady `Ownable`)

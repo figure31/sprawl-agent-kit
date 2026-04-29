@@ -658,46 +658,58 @@ def _collect_arc(b, price_wei):
 def cmd_list(args):
     if len(args) < 3:
         print("usage: write.py list <kind> <id> <priceEth>"); return
-    kind = sprawl.parse_kind(args[0])
-    key  = sprawl.encode_asset_id(kind, args[1])
-    wei  = sprawl.parse_eth(args[2])
-    tx = sprawl.cast_send("list(uint8,bytes32,uint256)", [kind, key, wei])
+    kind     = sprawl.parse_kind(args[0])
+    asset_id = args[1]
+    wei      = sprawl.parse_eth(args[2])
+    # Marketplace functions take the human-readable asset id directly.
+    # The contract converts to its bytes32 storage key (parses uint for
+    # links, keccak for entities/arcs) so decoded tx inputs stay readable.
+    tx = sprawl.cast_send("list(uint8,string,uint256)", [kind, asset_id, wei])
     print(f"listed tx: {tx}")
-    sprawl.append_history({"kind": "list", "asset_kind": args[0], "asset_id": args[1], "price_wei": wei, "tx": tx})
+    sprawl.append_history({"kind": "list", "asset_kind": args[0], "asset_id": asset_id, "price_wei": wei, "tx": tx})
 
 
 def cmd_unlist(args):
     if len(args) < 2:
         print("usage: write.py unlist <kind> <id>"); return
-    kind = sprawl.parse_kind(args[0])
-    key  = sprawl.encode_asset_id(kind, args[1])
-    tx = sprawl.cast_send("unlist(uint8,bytes32)", [kind, key])
+    kind     = sprawl.parse_kind(args[0])
+    asset_id = args[1]
+    tx = sprawl.cast_send("unlist(uint8,string)", [kind, asset_id])
     print(f"unlisted tx: {tx}")
-    sprawl.append_history({"kind": "unlist", "asset_kind": args[0], "asset_id": args[1], "tx": tx})
+    sprawl.append_history({"kind": "unlist", "asset_kind": args[0], "asset_id": asset_id, "tx": tx})
 
 
 def cmd_buy(args):
     """Buy a listed asset under the buyer's-premium model.
 
     The buyer agrees to a hammer price (`expectedEth`); the contract
-    requires the actual ETH sent to be `hammer + 25% premium`. The
-    seller receives the full hammer; the protocol receives the premium.
+    requires the actual ETH sent to be `hammer + premium`, where
+    `premium` is the live `resalePremiumBps` percentage (admin-tunable,
+    capped at 50%). The seller receives the full hammer; the protocol
+    receives the premium.
     """
     if len(args) < 3:
         print("usage: write.py buy <kind> <id> <expectedEth>"); return
-    kind = sprawl.parse_kind(args[0])
-    key  = sprawl.encode_asset_id(kind, args[1])
+    kind       = sprawl.parse_kind(args[0])
+    asset_id   = args[1]
     hammer_wei = sprawl.parse_eth(args[2])
-    # Premium is 25% of the hammer; integer math matches the contract
-    # exactly (BPS_DENOM = 10000, RESALE_PREMIUM_BPS = 2500).
-    premium_wei = (hammer_wei * 2500) // 10000
+    # Read the live premium percentage from the contract; fall back to
+    # 25% (the deploy-time default) if the read fails. The contract
+    # itself validates the actual ETH sent equals price + premium and
+    # reverts otherwise, so user funds are safe either way.
+    try:
+        premium_bps = int(sprawl.cast_call("resalePremiumBps()(uint256)", []).strip())
+    except Exception:
+        premium_bps = 2500
+    premium_wei = (hammer_wei * premium_bps) // 10000
     total_wei   = hammer_wei + premium_wei
+    pct = premium_bps / 100
     print(f"hammer:  {sprawl.format_eth(hammer_wei)} ETH")
-    print(f"premium: {sprawl.format_eth(premium_wei)} ETH (25%)")
+    print(f"premium: {sprawl.format_eth(premium_wei)} ETH ({pct:g}%)")
     print(f"total:   {sprawl.format_eth(total_wei)} ETH (sent to contract)")
-    tx = sprawl.cast_send("buy(uint8,bytes32,uint256)", [kind, key, hammer_wei], value_wei=total_wei)
+    tx = sprawl.cast_send("buy(uint8,string,uint256)", [kind, asset_id, hammer_wei], value_wei=total_wei)
     print(f"bought tx: {tx}")
-    sprawl.append_history({"kind": "buy", "asset_kind": args[0], "asset_id": args[1],
+    sprawl.append_history({"kind": "buy", "asset_kind": args[0], "asset_id": asset_id,
                            "hammer_wei": hammer_wei, "premium_wei": premium_wei,
                            "total_wei": total_wei, "tx": tx})
 

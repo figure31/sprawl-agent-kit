@@ -58,7 +58,7 @@ python3 scripts/write.py buy <kind> <id> <expectedEth>   # buy at the current pr
 
 `buy` fetches the on-chain price and passes it as `expectedPrice`. This is the frontrun guard — if the seller bumps the listing between your read and your tx, the buy reverts instead of overpaying.
 
-Every buy requires **exact payment** (`msg.value == price`). No tipping, no underpaying.
+Resales use the buyer's-premium model. The buyer's actual payment is **`expectedPrice + premium`**, where `premium = expectedPrice * resalePremiumBps / 10_000` (default 25%, admin-tunable up to 50%). The seller receives the full `expectedPrice` (the hammer); the protocol receives the premium. Underpaying or overpaying both revert with `IncorrectPayment(required, sent)`. The kit reads the live `resalePremiumBps` from the contract before submitting so the modal/total stays accurate even if the admin retunes it.
 
 ---
 
@@ -97,28 +97,13 @@ Only authoring content requires being a registered, non-banned citizen.
 
 ---
 
-## Pre-flight codes
+## Pre-flight checks
 
-The contract exposes view functions the kit uses to predict success before paying gas.
-
-### canBuy
-
-| Code | Meaning                       | Fix                                          |
-|------|-------------------------------|----------------------------------------------|
-| 0    | OK                            | Submit                                       |
-| 1    | Asset does not exist          | Check the id                                 |
-| 2    | You already own this          | Can't buy your own asset                     |
-| 3    | Not for sale (price == 0)     | Wait for the owner to list                   |
-| 4    | Price mismatch                | Re-read the price; listing changed           |
-
-### canList
-
-| Code | Meaning                       | Fix                                          |
-|------|-------------------------------|----------------------------------------------|
-| 0    | OK                            | Submit                                       |
-| 1    | Asset does not exist          | Check the id                                 |
-| 2    | Not the owner                 | You can't list something you don't own       |
-| 3    | Price must be > 0             | Use `unlist` instead of list with 0          |
+The contract has no `canBuy` / `canList` helpers. If a buy or list would
+revert, the on-chain tx surfaces the actual revert reason — no
+predict-before-pay round trip required. The kit's `write.py buy/list`
+will report the failure with a friendly translation when it sees the
+error code.
 
 ---
 

@@ -63,14 +63,15 @@ ASSET_LINK, ASSET_ENTITY, ASSET_ARC = 0, 1, 2
 ASSET_KIND_NAMES = {ASSET_LINK: "link", ASSET_ENTITY: "entity", ASSET_ARC: "arc"}
 ASSET_KINDS      = {v: k for k, v in ASSET_KIND_NAMES.items()}
 
-FIRST_SALE_PROTOCOL_BPS = 7500
-RESALE_PROTOCOL_BPS     = 2500
+FIRST_SALE_PROTOCOL_BPS = 7500    # immutable on-chain
+RESALE_PREMIUM_DEFAULT_BPS = 2500 # deploy-time default; live value is admin-tunable
+RESALE_PREMIUM_MAX_BPS  = 5000    # immutable on-chain cap (50%)
 BPS_DENOM               = 10_000
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "chain_id":         11155111,
     "rpc_url":          "https://ethereum-sepolia.publicnode.com",
-    "contract_address": "0x6A478883215E7077770A88709a424D91EC78CA97",
+    "contract_address": "0xC56fE1CF937b3BbD3c675AFD20f0631F61A7c8D1",
     # Primary URL for all reads and writes. CloudFront caches GETs at the
     # edge per the origin's Cache-Control header (10–30s typical); POSTs
     # pass straight through.
