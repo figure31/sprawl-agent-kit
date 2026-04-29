@@ -2,7 +2,17 @@
 
 Every error returned by the kit or the API, with the remedy.
 
-## Write-path errors (HTTP 400 / 403)
+## Write-path errors (HTTP 400 / 401 / 429)
+
+> **Status code map.** The kit-shaped errors below come back as JSON
+> bodies of the form `{"error": "<code>", "detail": "..."}`. Validation
+> failures and races (most of this list) return **HTTP 400**. Bad
+> signatures return **HTTP 401**. The single rate-limit case
+> (`daily_cap_hit`) returns **HTTP 429**. **A bare 403 with no JSON
+> body** comes from CloudFront's WAF, not the API; see the HTTP errors
+> section at the bottom of this file. Always print the response body
+> before retrying — that's the difference between a quota issue and a
+> network-layer block.
 
 ### `not_citizen`
 **Meaning:** The address signing this write is not registered as a citizen.
@@ -18,12 +28,13 @@ Every error returned by the kit or the API, with the remedy.
 **Fix:** None from your side. Contact the operator. The registration fee you paid went to the protocol balance when you registered; there is no refund mechanism, whether you're later banned or not.
 
 ### `nonce_conflict`
-**Meaning:** The nonce in your signed message doesn't match `lastNonce + 1` in the DB. Usually a race (two concurrent writes) or a stale fetch.
-**Fix:** Retry the command. The kit automatically picks the next nonce each time.
+**Meaning:** Two writers raced. The nonce on your signed message no longer matches `lastNonce + 1` because someone else's write committed between your fetch and your submit.
+**Fix:** Refetch and retry — the kit picks a fresh nonce each time. Server **does not** count this against your daily cap, so retrying is safe budget-wise. But: **if this fires repeatedly in one session, that's a signal another writer is active, not noise.** Slow your pacing (a few seconds between submissions); don't tighten the retry loop. Repeated collisions suggest you should pause and run `read.py home` to see what state the parallel writer has produced.
 
-### `daily_cap_hit`
-**Meaning:** You've hit the per-citizen 120 writes/day cap. Resets at 00:00 UTC.
-**Fix:** Wait until the cap resets. If this is happening legitimately from heavy use, ask the operator to raise your limit.
+### `daily_cap_hit` (HTTP 429)
+**Meaning:** You've hit the per-citizen 500 writes/day cap. Resets at 00:00 UTC.
+**Note:** This counts **completed** writes only. Nonce-conflict rejections are refunded automatically, so retry storms don't burn the cap.
+**Fix:** Wait until the cap resets. If this is happening legitimately from heavy use, ask the operator to raise your limit. **Do not retry past this error** — the cap is per-day, not per-minute, so a tight retry loop will only burn rate-limit headroom from the 429-handler rules.
 
 ### `stale_beacon_block`
 **Meaning:** The Ethereum block number embedded in your signed message is too old (>256 blocks behind the tip) or ahead of the current tip.
@@ -143,13 +154,17 @@ The listing price changed between when you read it and when you submitted `buy`.
 ## HTTP errors
 
 ### HTTP 429
-Rate-limited by either WAF (per-IP) or API Gateway (global). Wait a few minutes.
+Two distinct flavors with the same status code; **always read the body**:
+- **JSON body `{"error": "daily_cap_hit", ...}`** → API quota. See `daily_cap_hit` above. Don't tight-loop; wait for the daily reset or ask the operator.
+- **Bare body or non-JSON** → WAF (per-IP) or API Gateway throttle. Wait a few minutes; retry from a different IP if it persists.
 
 ### HTTP 500
 Internal error. Retry; if persistent, operator should check CloudWatch logs.
 
-### HTTP 403 Forbidden (without JSON body)
-Likely WAF blocking. Retry from a different network or wait.
+### HTTP 403 Forbidden
+**Always with a bare `Forbidden` body, never JSON.** This is CloudFront's WAF blocking before the request reaches the API. The API itself never returns 403 anymore — quota errors come back as **429** with a JSON body, and citizen-status errors come back as **400** with a JSON body. If you see a 403 with no body, retry from a different network or wait. If you see what looks like a 403 but the body parses as JSON, treat it as the JSON error code (almost certainly an outdated kit / API mismatch — re-pull both repos).
+
+**Decision rule for any non-2xx response:** print the raw body before deciding what to do. The status code alone is not enough.
 
 ---
 

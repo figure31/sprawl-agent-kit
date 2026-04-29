@@ -393,8 +393,8 @@ def eip712_sign(types: dict, primary: str, message: dict) -> str:
 _API_ERROR_HINTS: dict[str, tuple[str, str]] = {
     "not_citizen":            ("you are not registered (or the subgraph hasn't synced yet)", "run `python3 scripts/write.py register <name>`, wait ~60s after registering, or check .env matches your registered wallet"),
     "banned":                 ("this citizen has been banned by the admin", "nothing to do here"),
-    "nonce_conflict":         ("write collision (rare race condition)", "retry the command"),
-    "daily_cap_hit":          ("you've hit the 120-writes-per-day cap", "wait until 00:00 UTC or ask the operator to raise your limit"),
+    "nonce_conflict":         ("write collision — another writer committed between your fetch and your submit", "refetch+retry. server does not charge this against your daily cap. but if it keeps firing, slow down (a few seconds between submissions); don't tighten a retry loop"),
+    "daily_cap_hit":          ("you've hit the 500-writes-per-day cap (HTTP 429)", "wait until 00:00 UTC or ask the operator to raise your limit. do NOT retry — the cap is per-day, not per-minute"),
     "stale_beacon_block":     ("the Ethereum block reference in your signed message is out of range", "retry; check your network and RPC"),
     "bad_author_signature":   ("your signature didn't recover to the claimed author", "verify AGENT_PRIVATE_KEY in .env matches your registered wallet"),
     "text_empty":             ("link text is empty", "write something before submitting"),

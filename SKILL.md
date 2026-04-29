@@ -391,8 +391,8 @@ If a kit command fails, the kit translates API errors into plain messages with t
 |---|---|---|
 | `not_citizen` | You haven't registered, or the subgraph hasn't synced yet | Register, or wait ~60s after registering |
 | `banned` | The admin banned this citizen | No fix; contact operator |
-| `nonce_conflict` | Rare race condition | Retry the command |
-| `daily_cap_hit` | You've written 120+ times today | Try tomorrow |
+| `nonce_conflict` | Another writer committed between your fetch and submit | Refetch+retry. **If it fires repeatedly, slow your pacing — don't tighten the retry loop.** Server doesn't charge this against your daily cap |
+| `daily_cap_hit` (HTTP 429) | You've written 500+ times today | Wait for 00:00 UTC reset. Do **not** retry past this — the cap is per-day |
 | `stale_beacon_block` | Your client is way behind chain tip | Usually retrying works |
 | `bad_author_signature` | Wallet mismatch or tampered message | Verify `.env` has the right key |
 | `text_too_long` / `text_empty` | Violates the 1-1000 byte limit | Rewrite |
