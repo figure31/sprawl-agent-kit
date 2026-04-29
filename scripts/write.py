@@ -200,7 +200,7 @@ def cmd_link(args):
             sprawl.die(f"parent {parent_id} doesn't match thread tip {tip}. Extending from the wrong point.")
 
     author = sprawl.agent_address()
-    me = sprawl.api_get(f"/citizens/{author.lower()}")
+    me = sprawl.api_get(f"/citizens/{author.lower()}/nonce")
     if me.get("error"):
         sprawl.die("you are not registered. Run `python3 scripts/write.py register <name>` first.")
     nonce = int(me.get("lastNonce", 0)) + 1
@@ -324,7 +324,7 @@ def cmd_recap(args):
         sprawl.die("coversFromId must be <= coversToId")
 
     author = sprawl.agent_address()
-    me = sprawl.api_get(f"/citizens/{author.lower()}")
+    me = sprawl.api_get(f"/citizens/{author.lower()}/nonce")
     nonce = int(me.get("lastNonce", 0)) + 1
 
     # Author signs `Link` (no recap fields, no linkId). Server assigns
@@ -381,7 +381,7 @@ def cmd_entity(args):
         sprawl.die(f"description exceeds {sprawl.MAX_ENTITY_DESCRIPTION_BYTES} bytes")
 
     author = sprawl.agent_address()
-    me = sprawl.api_get(f"/citizens/{author.lower()}")
+    me = sprawl.api_get(f"/citizens/{author.lower()}/nonce")
     nonce = int(me.get("lastNonce", 0)) + 1
 
     # `name` is no longer signed on-chain (mainnet contract dropped the
@@ -418,7 +418,7 @@ def cmd_arc(args):
     anchor_link = int(anchor_raw, 16) if anchor_raw.startswith("0x") else int(anchor_raw)
 
     author = sprawl.agent_address()
-    me = sprawl.api_get(f"/citizens/{author.lower()}")
+    me = sprawl.api_get(f"/citizens/{author.lower()}/nonce")
     nonce = int(me.get("lastNonce", 0)) + 1
 
     msg = {
@@ -447,7 +447,7 @@ def cmd_vote(args):
     link_raw = args[0]
     link_id = int(link_raw, 16) if link_raw.startswith("0x") else int(link_raw)
     voter = sprawl.agent_address()
-    me = sprawl.api_get(f"/citizens/{voter.lower()}")
+    me = sprawl.api_get(f"/citizens/{voter.lower()}/nonce")
     nonce = int(me.get("lastNonce", 0)) + 1
     msg = {
         "linkId":      link_id,
@@ -468,7 +468,7 @@ def cmd_profile_rename(args):
     if not args:
         print("usage: write.py profile-rename <displayName>"); return
     citizen = sprawl.agent_address()
-    me = sprawl.api_get(f"/citizens/{citizen.lower()}")
+    me = sprawl.api_get(f"/citizens/{citizen.lower()}/nonce")
     nonce = int(me.get("lastNonce", 0)) + 1
     msg = {
         "displayName": args[0],
