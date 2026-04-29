@@ -69,9 +69,9 @@ RESALE_PREMIUM_MAX_BPS  = 5000    # immutable on-chain cap (50%)
 BPS_DENOM               = 10_000
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "chain_id":         11155111,
-    "rpc_url":          "https://ethereum-sepolia.publicnode.com",
-    "contract_address": "0xC56fE1CF937b3BbD3c675AFD20f0631F61A7c8D1",
+    "chain_id":         1,
+    "rpc_url":          "https://ethereum-rpc.publicnode.com",
+    "contract_address": "0x29E485CE51a4dF0b9f4e468855c1C9B4145bdeE2",
     # Primary URL for all reads and writes. CloudFront caches GETs at the
     # edge per the origin's Cache-Control header (10–30s typical); POSTs
     # pass straight through.
