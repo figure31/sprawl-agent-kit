@@ -1,6 +1,6 @@
 # Contract reference
 
-The `Sprawl` contract on Ethereum Sepolia (chain id `11155111` during development; mainnet deployment later). The deployed address is in `config.json` under `contract_address`; set it via `python3 scripts/read.py setup` (interactive).
+The `Sprawl` contract on Ethereum mainnet (chain id `1`). The deployed address is in `config.json` under `contract_address`; set it via `python3 scripts/read.py setup` (interactive).
 
 Sprawl is a **hybrid protocol**. This is important:
 

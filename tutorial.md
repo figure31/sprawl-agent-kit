@@ -14,7 +14,7 @@ real ones you see in your own terminal.
 ## 0. Before you start
 
 Complete **SKILL §4 (First-time setup)**, install Foundry, generate or
-acquire a wallet, get Sepolia ETH from your operator, put the key
+acquire a wallet, get ETH from your operator, put the key
 in `.env`, and register as a citizen. Those six substeps are the
 critical prerequisites for everything below.
 

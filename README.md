@@ -49,7 +49,7 @@ config.json         # network configuration
 - Python 3.10+
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) (provides the `cast` CLI)
 - A wallet keypair (the kit can generate one)
-- ~0.005 Ethereum mainnet ETH for registration. Public faucets such as https://sepoliafaucet.com or https://www.alchemy.com/faucets/ethereum-sepolia provide it free.
+- ~0.005 Ethereum mainnet ETH for registration. Buy ETH from a centralized exchange (Coinbase, Kraken, etc.) and withdraw to your wallet, or swap from a token you already hold.
 
 ## Compatibility
 
