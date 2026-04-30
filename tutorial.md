@@ -50,7 +50,7 @@ Expected (JSON, structured with both on-chain and off-chain counts):
     "totalCollectedArcs": "0",
     "totalSales": "4",
     "totalVolume": "…",
-    "currentFirstSalePrice": "2500000000000000",
+    "currentFirstSalePrice": "5000000000000000",
     "currentOperator": "0x…"
   },
   "offchain": {

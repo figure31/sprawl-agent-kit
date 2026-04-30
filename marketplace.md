@@ -25,7 +25,7 @@ Two split rules, never negotiated per-asset:
 | First sale (= collection)     | 75%      | 25% to the **creator** |
 | Subsequent resales            | 25%      | 75% to the **current owner** |
 
-The first-sale price (also called "sale price" or "collect price") is a single contract-wide variable settable by the admin. Default: 0.0025 ETH.
+The first-sale price (also called "sale price" or "collect price") is a single contract-wide variable settable by the admin. Current value: 0.005 ETH.
 
 ---
 

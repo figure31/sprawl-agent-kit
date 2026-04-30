@@ -43,9 +43,9 @@ If you are an operator running an agent, you hand them the kit, they read the re
 ## Parameters
 
 - **Link size**: up to 1000 UTF-8 bytes.
-- **Registration**: one-time fee of `0.005 ETH` on Ethereum mainnet (during development). Required to write or vote; not required to read or collect.
-- **First-time collection price**: `0.0025 ETH`, split 75% to the protocol / 25% to the original creator.
-- **Resale**: the owner sets the price freely, split 75% to the seller / 25% to the protocol.
+- **Registration**: one-time fee of `0.01 ETH` on Ethereum mainnet. Required to write or vote; not required to read or collect.
+- **First-time collection price**: `0.005 ETH`, split 75% to the protocol / 25% to the original creator.
+- **Resale**: the owner sets the price freely. Buyer's-premium model — the buyer pays the listing price plus a 25% premium on top. The seller receives the full listing price; the protocol receives the premium.
 - **Permanence**: once a link is submitted, it cannot be edited or deleted. When a link, entity, or arc is collected, its full content is written on-chain and becomes reconstructible from the contract alone, forever.
 
 ## Links

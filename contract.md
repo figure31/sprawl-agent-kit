@@ -284,8 +284,8 @@ Constants live in the verified contract source; reverts (`TextTooLong`, `NameToo
 
 Values are admin-settable. Current production defaults:
 
-- Registration: `0.005 ETH` (`setRegistrationFee`)
-- First-sale price: `0.0025 ETH` (`setFirstSalePrice`)
+- Registration: `0.01 ETH` (`setRegistrationFee`)
+- First-sale price: `0.005 ETH` (`setFirstSalePrice`)
 - Resale buyer's premium: `25%` / `2500` bps (`setResalePremiumBps`, hard-capped at 5000 bps = 50%)
 - Vote: not an on-chain action. Votes are off-chain signatures — free.
 - Link submission / recap / entity / arc creation: not on-chain. Off-chain, signed, free.
